@@ -30,6 +30,7 @@ list(PREPEND CMAKE_MODULE_PATH
 ########################################################################################################################
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin) # Set output path for the compiled files
 
+set(GEOGRAM_DIR "$ENV{GEOGRAM_DIR}" CACHE PATH "Directory where Geogram is installed.")
 set(OPTION_BUILD_TESTS ON CACHE BOOL "Build tests (based on GoogleTest).")
 
 

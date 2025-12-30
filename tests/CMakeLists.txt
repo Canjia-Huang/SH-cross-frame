@@ -36,6 +36,7 @@ target_link_libraries(${PROJECT_NAME}_TESTS
         PRIVATE
         ${PROJECT_NAME}_SH_CROSS_FRAME
         ${PROJECT_NAME}_TETGEN
+        Geogram::geogram
         GTest::gtest_main
 )
 

@@ -14,6 +14,8 @@
 #include <iostream>
 #include <sstream>
 #include <Eigen/Geometry>
+#include <geogram/mesh/mesh_io.h>
+#include <geogram/mesh/mesh_geometry.h>
 #include <gtest/gtest.h>
 #include <igl/read_triangle_mesh.h>
 #include <igl/tetgen/tetrahedralize.h>
@@ -23,6 +25,7 @@
 #include "SH-cross-frame/kt84/graphics/DisplayList.hh"
 #include "SH-cross-frame/kt84/graphics/graphics_util.hh"
 #include "utils/log.h"
+#include "utils.h"
 
 using namespace std;
 using namespace kt84;
@@ -68,6 +71,13 @@ struct Globals {
     } draginfo;
 #endif
 };
+
+Eigen::Matrix3d getRotationMatrixZYZ(double a, double b, double c) {
+    Eigen::Quaterniond q = Eigen::AngleAxisd(a, Eigen::Vector3d::UnitZ())
+                        * Eigen::AngleAxisd(b, Eigen::Vector3d::UnitY())
+                        * Eigen::AngleAxisd(c, Eigen::Vector3d::UnitZ());
+    return q.toRotationMatrix();
+}
 
 class TetMeshTest : public ::testing::Test {
     void SetUp() override {}
@@ -139,6 +149,82 @@ public:
         g.displist = {};
     }
 
+    void output_frame_visualization(
+        const std::string& path
+        ) {
+        GEO::Mesh M;
+
+        /* Create tet mesh vertices */
+        {
+            GEO::index_t new_v = M.vertices.create_vertices(g.mesh.n_vertices());
+            for (auto v : g.mesh.vertices()) {
+                auto p = g.mesh.vertex(v);
+                M.vertices.point(new_v++) = GEO::vec3(p[0], p[1], p[2]);
+            }
+        }
+
+        /* Create tet mesh edges */
+        {
+            std::vector<std::pair<GEO::index_t, GEO::index_t>> edges;
+            for (auto e : g.mesh.edges())
+                edges.emplace_back(g.mesh.edge(e).from_vertex().idx(), g.mesh.edge(e).to_vertex().idx());
+
+            GEO::index_t new_e = M.edges.create_edges(edges.size());
+            for (const auto& [ev0, ev1] : edges) {
+                M.edges.set_vertex(new_e, 0, ev0);
+                M.edges.set_vertex(new_e, 1, ev1);
+                ++new_e;
+            }
+        }
+
+        /* Get diagonal length */
+        double xyzmin[3], xyzmax[3];
+        GEO::get_bbox(M, xyzmin, xyzmax);
+        const double diagonal_length = std::sqrt(pow(xyzmax[0]-xyzmin[0], 2) + pow(xyzmax[1]-xyzmin[1], 2) + pow(xyzmax[2]-xyzmin[2], 2));
+        LOG::DEBUG("diagonal_length: {}", diagonal_length);
+
+        /* Create cubes */
+        {
+            const double l = diagonal_length * 0.01;
+
+            GEO::index_t new_v = M.vertices.create_vertices(8*g.mesh.n_vertices()); // per vertex
+            GEO::index_t new_c = M.cells.create_hexes(g.mesh.n_vertices()); // per vertex
+            for (auto v : g.mesh.vertices()) {
+                auto p = g.mesh.vertex(v);
+                auto& zyz = g.mesh.data(v).zyz;
+                const auto R = getRotationMatrixZYZ(zyz[0], zyz[1], zyz[2]);
+
+                const GEO::vec3 center(p[0], p[1], p[2]);
+                const GEO::vec3 v0(R(0, 0), R(1, 0), R(2, 0));
+                const GEO::vec3 v1(R(0, 1), R(1, 1), R(2, 1));
+                const GEO::vec3 v2(R(0, 2), R(1,2), R(2, 2));
+
+                M.vertices.point(new_v + 0) = center + l * v0 + l * v1 + l * v2;
+                M.vertices.point(new_v + 1) = center - l * v0 + l * v1 + l * v2;
+                M.vertices.point(new_v + 2) = center - l * v0 - l * v1 + l * v2;
+                M.vertices.point(new_v + 3) = center + l * v0 - l * v1 + l * v2;
+                M.vertices.point(new_v + 4) = center + l * v0 + l * v1 - l * v2;
+                M.vertices.point(new_v + 5) = center - l * v0 + l * v1 - l * v2;
+                M.vertices.point(new_v + 6) = center - l * v0 - l * v1 - l * v2;
+                M.vertices.point(new_v + 7) = center + l * v0 - l * v1 - l * v2;
+
+                M.cells.set_vertex(new_c, 0, new_v + 0);
+                M.cells.set_vertex(new_c, 1, new_v + 3);
+                M.cells.set_vertex(new_c, 2, new_v + 1);
+                M.cells.set_vertex(new_c, 3, new_v + 2);
+                M.cells.set_vertex(new_c, 4, new_v + 4);
+                M.cells.set_vertex(new_c, 5, new_v + 7);
+                M.cells.set_vertex(new_c, 6, new_v + 5);
+                M.cells.set_vertex(new_c, 7, new_v + 6);
+
+                new_v += 8;
+                ++new_c;
+            }
+        }
+
+        GEO::mesh_save(M, path);
+    }
+
     Globals g;
 };
 
@@ -147,4 +233,5 @@ TEST_F(TetMeshTest, bone) {
     tetrahedralize();
     g.mesh.compute_boundary_field();
     g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
 }
