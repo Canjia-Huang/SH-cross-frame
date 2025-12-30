@@ -1,0 +1,45 @@
+########################################################################################################################
+# Download and install googletest
+########################################################################################################################
+include(FetchContent)
+FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+
+########################################################################################################################
+# Build tests
+########################################################################################################################
+enable_testing()
+
+file(GLOB TESTS_SOURCE
+        ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/*.cc)
+
+add_executable(${PROJECT_NAME}_TESTS
+        ${TESTS_SOURCE})
+
+target_include_directories(${PROJECT_NAME}_TESTS
+        PRIVATE
+        "${CMAKE_SOURCE_DIR}/src"
+        "${CMAKE_SOURCE_DIR}/deps"
+        "${CMAKE_SOURCE_DIR}/deps/tetgen1.5.0"
+        ${EIGEN3_INCLUDE_DIR}
+)
+
+target_link_libraries(${PROJECT_NAME}_TESTS
+        PRIVATE
+        ${PROJECT_NAME}_SH_CROSS_FRAME
+        ${PROJECT_NAME}_TETGEN
+        GTest::gtest_main
+)
+
+add_compile_definitions(TESTDATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../data/")
+
+include(GoogleTest)
+gtest_discover_tests(${PROJECT_NAME}_TESTS)

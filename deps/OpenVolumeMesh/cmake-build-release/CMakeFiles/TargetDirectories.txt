@@ -1,0 +1,3 @@
+/home/huangcanjia/SH-cross-frame/deps/OpenVolumeMesh/cmake-build-release/CMakeFiles/Project_OPENVOLUMEMESH.dir
+/home/huangcanjia/SH-cross-frame/deps/OpenVolumeMesh/cmake-build-release/CMakeFiles/edit_cache.dir
+/home/huangcanjia/SH-cross-frame/deps/OpenVolumeMesh/cmake-build-release/CMakeFiles/rebuild_cache.dir
