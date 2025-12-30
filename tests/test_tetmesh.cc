@@ -9,6 +9,7 @@
 //   - Modify some headers
 //   - Remove visualization
 //   - Replace `cout`/`scout` -> spdlog LOG
+//   - Output visualization
 // =============================================================================
 
 #include <iostream>
@@ -22,7 +23,6 @@
 #include "SH-cross-frame/frame3d.hh"
 #include "SH-cross-frame/kt84/util.hh"
 #include "SH-cross-frame/kt84/vector_cast.hh"
-#include "SH-cross-frame/kt84/graphics/DisplayList.hh"
 #include "SH-cross-frame/kt84/graphics/graphics_util.hh"
 #include "utils/log.h"
 #include "utils.h"
@@ -40,28 +40,6 @@ struct Globals {
         MatrixXi F;
     } trimesh;
     frame3d::TetMesh mesh;
-    struct {
-        DisplayList edges;
-        DisplayList cross;
-        DisplayList cube;
-#ifdef FRAME3D_FIXED_BOUNDARY
-        DisplayList trimesh;
-#endif
-    } displist;
-    struct {
-        double fovy = 40;
-        bool edges = true;
-        bool frames = true;
-        bool vizmode = true;
-        double frame_scale = 0.01;
-#ifdef FRAME3D_FIXED_BOUNDARY
-        bool trimesh = true;
-#endif
-    } drawopt;
-    struct {
-        double threshold = 0;
-        int axis = -1;
-    } crosssection;
 #ifdef FRAME3D_FIXED_BOUNDARY
     struct {
         OpenVolumeMesh::HalfFaceHandle hf;
@@ -86,7 +64,7 @@ public:
     void read_trimesh(
         const std::string& path
         ) {
-        if (!igl::read_triangle_mesh(path, g.trimesh.V, g.trimesh.F)) return;
+        EXPECT_TRUE(igl::read_triangle_mesh(path, g.trimesh.V, g.trimesh.F));
 
         LOG::INFO("trimesh statistics:");
         LOG::INFO("vertices: {}", g.trimesh.V.rows());
@@ -108,7 +86,7 @@ public:
         ) {
         MatrixXd TV;
         MatrixXi TT, TF;
-        if (igl::tetrahedralize(g.trimesh.V, g.trimesh.F, g.tetgen_switches, TV, TT, TF) != 0) return;
+        EXPECT_FALSE(igl::tetrahedralize(g.trimesh.V, g.trimesh.F, g.tetgen_switches, TV, TT, TF) != 0);
         // I HAVE NO IDEA WHY THIS MAKES A DIFFERENCE (when purely axis-aligned cube is input)!
         for (int i = 0; i < TV.rows(); ++i)
             TV.row(i) += Vector3d::Random() * 0.00000000001;
@@ -145,8 +123,47 @@ public:
             vol_avg += vol / g.mesh.n_cells();
         }
         LOG::INFO("min/max/avg tet cell volume: {}/{}/{}", vol_min, vol_max, vol_avg);
+    }
 
-        g.displist = {};
+    void read_tetmesh(
+        const std::string& path
+        ) {
+        GEO::Mesh M;
+        EXPECT_TRUE(GEO::mesh_load(path, M));
+
+        for (auto& p : M.vertices.points())
+            p += GEO::vec3(GEO::Numeric::random_float64(), GEO::Numeric::random_float64(), GEO::Numeric::random_float64()) * 0.00000000001;
+
+        g.mesh.clear();
+        // copy vertices
+        g.mesh.reserve_vertices((int)M.vertices.nb());
+        for (const auto& v : M.vertices)
+            g.mesh.add_vertex(vector_cast<3, OpenVolumeMesh::Vec3d, GEO::vec3>(M.vertices.point(v)));
+        // copy tets
+        g.mesh.reserve_cells((int)M.cells.nb());
+        for (const auto& c : M.cells) {
+            OpenVolumeMesh::VertexHandle v[4];
+            for (int j = 0; j < 4; ++j)
+                v[j].idx(M.cells.vertex(c, j));
+            g.mesh.add_cell(v[0], v[1], v[2], v[3]);
+        }
+
+        g.mesh.precompute();
+        LOG::INFO("tetmesh statistics:");
+        LOG::INFO("vertices: {}", g.mesh.n_vertices());
+        LOG::INFO("tets: {}", g.mesh.n_cells());
+        LOG::INFO("faces: {}", g.mesh.n_faces());
+        LOG::INFO("edges: {}", g.mesh.n_edges());
+
+        // tet volumes statistics
+        double vol_max = 0, vol_min = 1000, vol_avg = 0;
+        for (auto tet : g.mesh.cells()) {
+            double vol = g.mesh.data(tet).tetCellVolume;
+            vol_max = max<double>(vol_max, vol);
+            vol_min = min<double>(vol_min, vol);
+            vol_avg += vol / g.mesh.n_cells();
+        }
+        LOG::INFO("min/max/avg tet cell volume: {}/{}/{}", vol_min, vol_max, vol_avg);
     }
 
     void output_frame_visualization(
@@ -180,12 +197,14 @@ public:
         /* Get diagonal length */
         double xyzmin[3], xyzmax[3];
         GEO::get_bbox(M, xyzmin, xyzmax);
-        const double diagonal_length = std::sqrt(pow(xyzmax[0]-xyzmin[0], 2) + pow(xyzmax[1]-xyzmin[1], 2) + pow(xyzmax[2]-xyzmin[2], 2));
-        LOG::DEBUG("diagonal_length: {}", diagonal_length);
+        // const double diagonal_length = std::sqrt(pow(xyzmax[0]-xyzmin[0], 2) + pow(xyzmax[1]-xyzmin[1], 2) + pow(xyzmax[2]-xyzmin[2], 2));
+        // LOG::DEBUG("diagonal_length: {}", diagonal_length);
+        const double minimum_length = std::min({xyzmax[0]-xyzmin[0], xyzmax[1]-xyzmin[1], xyzmax[2]-xyzmin[2]});
+        LOG::DEBUG("minimum_length: {}", minimum_length);
 
         /* Create cubes */
         {
-            const double l = diagonal_length * 0.01;
+            const double l = minimum_length * 0.1;
 
             GEO::index_t new_v = M.vertices.create_vertices(8*g.mesh.n_vertices()); // per vertex
             GEO::index_t new_c = M.cells.create_hexes(g.mesh.n_vertices()); // per vertex
@@ -222,7 +241,7 @@ public:
             }
         }
 
-        GEO::mesh_save(M, path);
+        EXPECT_TRUE(GEO::mesh_save(M, path));
     }
 
     Globals g;
@@ -230,8 +249,92 @@ public:
 
 TEST_F(TetMeshTest, bone) {
     read_trimesh(std::string(TESTDATA_PATH) + "bone.obj");
-    tetrahedralize();
     g.mesh.compute_boundary_field();
     g.mesh.compute_field(g.w_boundary);
     output_frame_visualization(get_current_test_name() + ".geogram");
 }
+
+TEST_F(TetMeshTest, bunny) {
+    read_trimesh(std::string(TESTDATA_PATH) + "bone.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, double_torus) {
+    read_trimesh(std::string(TESTDATA_PATH) + "double-torus.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, ellipsoid) {
+    read_trimesh(std::string(TESTDATA_PATH) + "ellipsoid.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, fandisk) {
+    read_trimesh(std::string(TESTDATA_PATH) + "fandisk.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, fertility) {
+    read_trimesh(std::string(TESTDATA_PATH) + "fertility.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, hanger) {
+    read_trimesh(std::string(TESTDATA_PATH) + "hanger.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, impeller) {
+    read_trimesh(std::string(TESTDATA_PATH) + "impeller.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, joint) {
+    read_trimesh(std::string(TESTDATA_PATH) + "joint.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, rockarm) {
+    read_trimesh(std::string(TESTDATA_PATH) + "rockarm.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, rod) {
+    read_trimesh(std::string(TESTDATA_PATH) + "rod.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, sculpture) {
+    read_trimesh(std::string(TESTDATA_PATH) + "sculpture.obj");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
+TEST_F(TetMeshTest, s07u_notch) {
+    read_tetmesh(std::string(TESTDATA_PATH) + "s07u_notch.mesh");
+    g.mesh.compute_boundary_field();
+    g.mesh.compute_field(g.w_boundary);
+    output_frame_visualization(get_current_test_name() + ".geogram");
+}
+
