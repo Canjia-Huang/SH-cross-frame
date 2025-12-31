@@ -35,7 +35,7 @@ If you use this code, you may need to cite the paper:
 - [x] add command line application
 - [ ] make `FRAME3D_FIXED_BOUNDARY` macro optional
 - [ ] make deps lighter
-    - [ ] remove tetgen deps (already include in geogram)
+    - [ ] remove tetgen deps (already included in geogram)
 
 # :link: Requirements / dependencies
 
