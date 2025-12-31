@@ -255,7 +255,7 @@ TEST_F(TetMeshTest, bone) {
 }
 
 TEST_F(TetMeshTest, bunny) {
-    read_trimesh(std::string(TESTDATA_PATH) + "bone.obj");
+    read_trimesh(std::string(TESTDATA_PATH) + "bunny.obj");
     g.mesh.compute_boundary_field();
     g.mesh.compute_field(g.w_boundary);
     output_frame_visualization(get_current_test_name() + ".geogram");
