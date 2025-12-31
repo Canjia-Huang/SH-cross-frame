@@ -31,10 +31,11 @@ If you use this code, you may need to cite the paper:
 
 # :bulb: What did I do?
 
-- [x] Refactor CMake configuration.
-- [x] Add command line application.
-- [ ] Make `FRAME3D_FIXED_BOUNDARY` macro optional.
-- [ ] Make deps lighter.
+- [x] refactor CMake configuration
+- [x] add command line application
+- [ ] make `FRAME3D_FIXED_BOUNDARY` macro optional
+- [ ] make deps lighter
+    - [ ] remove tetgen deps (already include in geogram)
 
 # :link: Requirements / dependencies
 
