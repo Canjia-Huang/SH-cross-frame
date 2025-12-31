@@ -92,7 +92,7 @@ vertex1-vector0.x vertex1-vector0.y vertex1-vector0.z
 ...
 ```
 
-Under the "-v" option, a `.geogram` visualization file will also be created, which can be opened with [Vorpaview](https://github.com/BrunoLevy/geogram/wiki/Vorpaview) (the visualization software from the Geogram library).
+Under the `-v` option, a `.geogram` visualization file will also be created, which can be opened with [Vorpaview](https://github.com/BrunoLevy/geogram/wiki/Vorpaview) (the visualization software from the Geogram library).
 
 ## Example
 
